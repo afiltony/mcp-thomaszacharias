@@ -42,7 +42,6 @@ for name in DATABASE_URL DATABASE_CA_CERT UNSTOPPABLE_API_KEY ETHEREUM_RPC_URL B
   elif [[ "$name" == "MCP_AUTH_SECRET" ]]; then
     openssl rand -hex 32 | tr -d '\n' | gcloud secrets versions add "$name" --data-file=- >/dev/null
     echo "   $name: generated"
-    continue
   else
     read -r -s -p "Value for $name (enter to skip): " value; echo
     [[ -n "$value" ]] && printf '%s' "$value" | gcloud secrets versions add "$name" --data-file=- >/dev/null
