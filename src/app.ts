@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { existsSync } from 'node:fs';
 import type { AppContext } from './context.js';
 import { apiRouter, billingRouter, publicApprovalRouter } from './api/routes.js';
+import { webAppRouter, webOriginPolicy } from './api/web.js';
 import { createMcpServer, FREE_TOOLS } from './mcp/tools.js';
 import { meter, requireApiKey, validateOrigin } from './security/auth.js';
 
@@ -112,6 +113,29 @@ export function createApp(ctx: AppContext) {
     res.sendFile(join(publicDir(), 'approve.html'));
   });
   app.get('/approve.js', (_req, res) => res.sendFile(join(publicDir(), 'approve.js')));
+
+  // ---- Keyless browser API (used by this server's web app and by the IPFS-hosted copy) ----
+  // Not metered against subscriptions: it is per-IP rate-limited and origin-checked instead.
+  if (env.WEB_API_ENABLED) {
+    app.use('/web-api', webOriginPolicy(ctx), rateLimit(ctx.limiter, { perMinute: env.WEB_RATE_LIMIT_PER_MINUTE, scope: 'web' }), webAppRouter(ctx));
+  }
+
+  // ---- Browser web app (static SPA) ----
+  if (env.WEB_APP_ENABLED) {
+    const webDir = join(publicDir(), 'app');
+    const webCsp =
+      "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+    const cache = env.NODE_ENV === 'production' ? '1h' : 0;
+    const setCsp = (res: Response) => res.setHeader('Content-Security-Policy', webCsp);
+    if (env.MEDIA_DIR) app.use('/assets/media', express.static(env.MEDIA_DIR, { index: false, maxAge: cache, setHeaders: setCsp }));
+    app.use('/assets', express.static(join(webDir, 'assets'), { index: false, maxAge: cache, setHeaders: setCsp }));
+    // Client-side routes all serve the same shell.
+    app.get(['/', '/pay', '/resolve', '/compare', '/history', '/saved', '/networks', '/pricing', '/docs'], (_req, res) => {
+      setCsp(res);
+      res.setHeader('Cache-Control', 'no-cache');
+      res.sendFile(join(webDir, 'index.html'));
+    });
+  }
 
   app.use((_req, _res, next) => next(new AppError('INVALID_REQUEST', 'Not found')));
 

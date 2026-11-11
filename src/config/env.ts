@@ -55,6 +55,28 @@ const EnvSchema = z.object({
   ALLOWED_ORIGINS: z.string().optional(),
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(60),
   PUBLIC_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(30),
+  /** Serve the browser web app at /. */
+  WEB_APP_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v !== 'false' && v !== '0'),
+  /** Expose the keyless, origin-checked /web-api used by the web app (here or on IPFS). */
+  WEB_API_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v !== 'false' && v !== '0'),
+  WEB_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(30),
+  /** Optional folder served at /assets/media instead of the bundled public/app/assets/media. */
+  MEDIA_DIR: z.string().optional(),
+  /**
+   * Extra browser origins (CORS) for /web-api, e.g. IPFS gateways serving the static site.
+   * Comma-separated; "*" in a host matches one or more labels; a lone "*" allows any origin.
+   */
+  WEB_ALLOWED_ORIGINS: z
+    .string()
+    .default(
+      'https://*.ipfs.dweb.link,https://dweb.link,https://ipfs.io,https://*.ipfs.w3s.link,https://w3s.link,https://*.mypinata.cloud,https://gateway.pinata.cloud,https://*.ipfs.4everland.io',
+    ),
   REQUEST_BODY_LIMIT: z.string().default('32kb'),
   TRUST_PROXY: bool,
   // ---- Supabase Postgres (all durable state; the server writes no files) ----
