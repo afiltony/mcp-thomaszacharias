@@ -14,7 +14,13 @@ const EnvSchema = z.object({
   PUBLIC_BASE_URL: z.string().url().optional(),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 
-  // Unstoppable Domains Resolution Service (server-side only)
+  /**
+   * How Unstoppable Domains records are read. "onchain" reads the UNS registry contracts over the
+   * RPC URLs below (no API key). "api" uses the Resolution Service API (needs UNSTOPPABLE_API_KEY).
+   * "auto" = api when a key is set, otherwise onchain.
+   */
+  UD_RESOLVER: z.enum(['auto', 'onchain', 'api']).default('auto'),
+  // Unstoppable Domains Resolution Service (server-side only; optional with UD_RESOLVER=onchain)
   UNSTOPPABLE_API_KEY: z.string().optional(),
   UNSTOPPABLE_API_BASE: z.string().url().default('https://api.unstoppabledomains.com/resolve'),
   UNSTOPPABLE_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
@@ -77,6 +83,8 @@ const EnvSchema = z.object({
 export type Env = z.infer<typeof EnvSchema> & {
   apiKeys: Map<string, string>; // key -> principal name
   allowedOrigins: string[];
+  /** Effective domain resolver after resolving UD_RESOLVER=auto. */
+  resolver: 'onchain' | 'api';
 };
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
@@ -96,10 +104,13 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     apiKeys.set(key, name);
   }
 
+  const resolver: 'onchain' | 'api' = e.UD_RESOLVER === 'auto' ? (e.UNSTOPPABLE_API_KEY ? 'api' : 'onchain') : e.UD_RESOLVER;
+
   if (e.NODE_ENV === 'production') {
     if (apiKeys.size === 0) throw new Error('API_KEYS is required in production');
     if (!e.MCP_AUTH_SECRET || e.MCP_AUTH_SECRET.length < 32) throw new Error('MCP_AUTH_SECRET (>= 32 chars) is required in production');
-    if (!e.UNSTOPPABLE_API_KEY) throw new Error('UNSTOPPABLE_API_KEY is required in production');
+    if (resolver === 'api' && !e.UNSTOPPABLE_API_KEY) throw new Error('UNSTOPPABLE_API_KEY is required when UD_RESOLVER=api');
+    if (resolver === 'onchain' && !e.POLYGON_RPC_URL) throw new Error('POLYGON_RPC_URL is required for on-chain domain resolution');
     if (!e.PUBLIC_BASE_URL) throw new Error('PUBLIC_BASE_URL is required in production');
     if (!e.DATABASE_URL) throw new Error('DATABASE_URL (Supabase) is required in production');
   }
@@ -111,5 +122,5 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const allowedOrigins = (e.ALLOWED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
   if (e.PUBLIC_BASE_URL) allowedOrigins.push(new URL(e.PUBLIC_BASE_URL).origin);
 
-  return { ...e, apiKeys, allowedOrigins };
+  return { ...e, apiKeys, allowedOrigins, resolver };
 }

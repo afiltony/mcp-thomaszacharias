@@ -1,6 +1,7 @@
 import { loadEnv, type Env } from './config/env.js';
 import type { AppContext } from './context.js';
 import { UnstoppableRecordsSource } from './domain/unstoppable.js';
+import { OnchainRecordsSource } from './domain/onchain.js';
 import { buildGateways } from './evm/gateway.js';
 import { CoinGeckoPriceSource } from './pricing/prices.js';
 import { createApp } from './app.js';
@@ -12,7 +13,13 @@ import { createStores, type Stores } from './store/index.js';
 export function buildContext(env: Env, stores: Stores): AppContext {
   return {
     env,
-    records: new UnstoppableRecordsSource({ apiKey: env.UNSTOPPABLE_API_KEY, baseUrl: env.UNSTOPPABLE_API_BASE, timeoutMs: env.UNSTOPPABLE_TIMEOUT_MS }),
+    records:
+      env.resolver === 'api'
+        ? new UnstoppableRecordsSource({ apiKey: env.UNSTOPPABLE_API_KEY, baseUrl: env.UNSTOPPABLE_API_BASE, timeoutMs: env.UNSTOPPABLE_TIMEOUT_MS })
+        : new OnchainRecordsSource({
+            rpcUrls: { polygon: env.POLYGON_RPC_URL, ethereum: env.ETHEREUM_RPC_URL, base: env.BASE_RPC_URL },
+            timeoutMs: env.RPC_TIMEOUT_MS,
+          }),
     gateways: buildGateways(env as unknown as Record<string, unknown>, env.RPC_TIMEOUT_MS),
     prices: new CoinGeckoPriceSource({
       baseUrl: env.PRICE_API_BASE,
@@ -47,7 +54,7 @@ async function main() {
       env: env.NODE_ENV,
       store: ctx.storeHealth.kind,
       networks: Object.keys(ctx.gateways),
-      resolver: Boolean(env.UNSTOPPABLE_API_KEY),
+      resolver: env.resolver,
       auth: env.apiKeys.size > 0 ? 'api-key' : 'DISABLED (dev)',
     });
   });

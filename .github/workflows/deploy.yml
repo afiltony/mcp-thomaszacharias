@@ -92,6 +92,7 @@ jobs:
             BILLING_DOMAIN=vimatons.dao
             BILLING_PINNED_ADDRESSES=${{ vars.BILLING_PINNED_ADDRESSES }}
             RECIPIENT_RECORD_POLICY=${{ vars.RECIPIENT_RECORD_POLICY || 'ud-precedence' }}
+            UD_RESOLVER=${{ vars.UD_RESOLVER || 'auto' }}
             LOG_LEVEL=info
           # Values come from Secret Manager (stored as secrets, not files).
           secrets: |
