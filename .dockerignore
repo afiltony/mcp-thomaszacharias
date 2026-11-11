@@ -1,0 +1,13 @@
+node_modules
+dist
+data
+tests
+coverage
+.git
+.github
+.env
+.env.*
+*.log
+*.zip
+cloudflare
+deploy

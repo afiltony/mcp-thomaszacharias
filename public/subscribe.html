@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Subscribe with USDC</title>
+<style>
+  :root { --bg:#f6f5f2; --card:#fff; --ink:#1b1b1f; --muted:#62626b; --line:#e3e1db; --accent:#1f5eff; --ok:#137a3f; --bad:#b42318; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#111214; --card:#1b1c20; --ink:#ececf0; --muted:#a0a0aa; --line:#2c2d33; --accent:#6d93ff; --ok:#4cc38a; --bad:#ff6b5e; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 680px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  .plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+  .plan { border: 1px solid var(--line); border-radius: 10px; padding: 12px; cursor: pointer; }
+  .plan.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+  .plan strong { display:block; font-size: 16px; }
+  .price { font-size: 20px; font-weight: 650; margin: 6px 0; }
+  dl { display: grid; grid-template-columns: 120px 1fr; gap: 8px 12px; margin: 0; }
+  dt { color: var(--muted); }
+  dd { margin: 0; word-break: break-all; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+  select { font: inherit; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); width: 100%; }
+  button { appearance: none; border: 0; border-radius: 10px; padding: 12px 18px; font: inherit; font-weight: 600; background: var(--accent); color: #fff; cursor: pointer; width: 100%; margin-top: 10px; }
+  button[disabled] { opacity: .45; cursor: not-allowed; }
+  .status { padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); word-break: break-word; }
+  .status.err { border-color: var(--bad); color: var(--bad); }
+  .status.ok { border-color: var(--ok); color: var(--ok); }
+  .key { font-family: ui-monospace, Menlo, monospace; font-size: 13px; padding: 10px; border: 1px dashed var(--ok); border-radius: 8px; word-break: break-all; user-select: all; }
+  @media (max-width: 480px) { dl { grid-template-columns: 1fr; gap: 2px 0; } dd { margin-bottom: 8px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Subscribe to the payment-route MCP</h1>
+  <p class="sub">Crypto only. Pay in USDC from your own wallet to <strong id="payto">…</strong>. No cards, no bank transfers.</p>
+
+  <section id="choose">
+    <div class="card">
+      <strong>1. Choose a plan</strong>
+      <div class="plans" id="plans" style="margin-top:10px"></div>
+    </div>
+    <div class="card">
+      <strong>2. Choose the network you'll pay on</strong>
+      <select id="network" style="margin-top:10px"></select>
+      <button id="connect">Connect wallet</button>
+      <button id="create" disabled>Create invoice</button>
+    </div>
+  </section>
+
+  <section id="invoice" hidden>
+    <div class="card">
+      <strong>3. Review and pay</strong>
+      <dl style="margin-top:10px">
+        <dt>Plan</dt><dd id="i-plan"></dd>
+        <dt>Amount</dt><dd id="i-amount"></dd>
+        <dt>Pay to</dt><dd><span id="i-domain"></span><br><span class="mono" id="i-treasury"></span></dd>
+        <dt>Network</dt><dd id="i-network"></dd>
+        <dt>Token contract</dt><dd class="mono" id="i-token"></dd>
+        <dt>From</dt><dd class="mono" id="i-payer"></dd>
+        <dt>Expires</dt><dd id="i-expires"></dd>
+      </dl>
+      <button id="pay">Pay in wallet</button>
+    </div>
+  </section>
+
+  <div id="result" class="status" hidden></div>
+  <div id="keybox" class="card" hidden>
+    <strong>Your API key</strong>
+    <p class="sub" style="margin:6px 0">Copy it now and keep it secret. Use it as <span class="mono">Authorization: Bearer &lt;key&gt;</span> for <span class="mono">/mcp</span>.</p>
+    <div class="key" id="apikey"></div>
+  </div>
+</main>
+<script src="/subscribe.js"></script>
+</body>
+</html>

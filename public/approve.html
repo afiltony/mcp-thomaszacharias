@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Approve USDC Transfer</title>
+<style>
+  :root { --bg:#f6f5f2; --card:#fff; --ink:#1b1b1f; --muted:#62626b; --line:#e3e1db; --accent:#1f5eff; --ok:#137a3f; --bad:#b42318; --warn:#9a6700; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#111214; --card:#1b1c20; --ink:#ececf0; --muted:#a0a0aa; --line:#2c2d33; --accent:#6d93ff; --ok:#4cc38a; --bad:#ff6b5e; --warn:#e0b04a; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  dl { display: grid; grid-template-columns: 140px 1fr; gap: 10px 12px; margin: 0; }
+  dt { color: var(--muted); }
+  dd { margin: 0; word-break: break-all; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+  .big { font-size: 22px; font-weight: 650; }
+  .checks li { margin: 4px 0; }
+  .pass::before { content: "✓ "; color: var(--ok); font-weight: 700; }
+  .fail::before { content: "✗ "; color: var(--bad); font-weight: 700; }
+  .warn { color: var(--warn); }
+  .status { padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); }
+  .status.err { border-color: var(--bad); color: var(--bad); }
+  .status.ok { border-color: var(--ok); color: var(--ok); }
+  button { appearance: none; border: 0; border-radius: 10px; padding: 12px 18px; font: inherit; font-weight: 600; background: var(--accent); color: #fff; cursor: pointer; width: 100%; }
+  button[disabled] { opacity: .45; cursor: not-allowed; }
+  label { display:flex; gap:10px; align-items:flex-start; margin: 12px 0; }
+  @media (max-width: 480px) { dl { grid-template-columns: 1fr; gap: 2px 0; } dd { margin-bottom: 8px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Approve USDC transfer</h1>
+  <p class="sub">Review every detail. Your wallet signs — this page never sees your keys.</p>
+
+  <div id="load" class="status">Loading prepared transfer…</div>
+
+  <section id="details" hidden>
+    <div class="card">
+      <div class="big" id="amount"></div>
+      <div class="sub" id="toDomain"></div>
+      <dl>
+        <dt>Recipient</dt><dd class="mono" id="recipient"></dd>
+        <dt>Record used</dt><dd class="mono" id="record"></dd>
+        <dt>Network</dt><dd id="network"></dd>
+        <dt>Token contract</dt><dd class="mono" id="token"></dd>
+        <dt>Transaction to</dt><dd id="txto"></dd>
+        <dt>From (your wallet)</dt><dd class="mono" id="from"></dd>
+        <dt>Est. network fee</dt><dd id="fee"></dd>
+        <dt>Max network fee</dt><dd id="maxfee"></dd>
+        <dt>Total debit</dt><dd id="total"></dd>
+        <dt>Expires</dt><dd id="expires"></dd>
+      </dl>
+    </div>
+
+    <div class="card">
+      <strong>Independent checks (in this browser)</strong>
+      <ul class="checks" id="checks"></ul>
+      <ul id="warnings" class="warn"></ul>
+    </div>
+
+    <div class="card">
+      <label><input type="checkbox" id="confirm"> <span>I confirm the recipient address, network, token and amount above are correct.</span></label>
+      <button id="connect">Connect wallet</button>
+      <div style="height:10px"></div>
+      <button id="approve" disabled>Re-check and approve in wallet</button>
+    </div>
+
+    <div id="result" class="status" hidden></div>
+  </section>
+</main>
+<script src="/approve.js"></script>
+</body>
+</html>

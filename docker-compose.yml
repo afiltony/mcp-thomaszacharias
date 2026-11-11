@@ -1,0 +1,38 @@
+# Local Docker deployment: the app plus a local Postgres standing in for Supabase.
+#   docker compose up -d --build
+# Secrets come from .env.docker (git-ignored). Production (Cloud Run + Supabase) does not use this file.
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: mcp
+      POSTGRES_PASSWORD: mcp
+      POSTGRES_DB: mcp
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mcp -d mcp"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build: .
+    image: thomaszacharias-mcp:local
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env.docker
+    environment:
+      # development: production mode would require the real UD key, Supabase URL and public HTTPS origin
+      NODE_ENV: development
+      TRUST_PROXY: "false"
+      DATABASE_URL: postgresql://mcp:mcp@db:5432/mcp?sslmode=disable
+      AUTO_MIGRATE: "true"
+      PUBLIC_BASE_URL: http://localhost:8080
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  pgdata:

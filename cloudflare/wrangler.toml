@@ -1,0 +1,10 @@
+# Optional: deploy with `npx wrangler deploy` from this folder.
+name = "thomaszacharias-mcp-proxy"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+# Replace with your domain once it's on Cloudflare DNS.
+routes = [{ pattern = "mcp.example.com", custom_domain = true }]
+
+[vars]
+ORIGIN = "https://thomaszacharias-mcp-REPLACE.asia-south1.run.app"

@@ -1,0 +1,112 @@
+# Test → build image → push to GitHub Container Registry → migrate Supabase → deploy to Cloud Run.
+# Google Cloud stores no files: the image lives on ghcr.io (public), no source upload,
+# no Cloud Build, no Artifact Registry, no Cloud Storage bucket. Auth uses Workload
+# Identity Federation, so there is no Google key file anywhere either.
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/thomaszacharias-mcp
+  SERVICE: thomaszacharias-mcp
+  REGION: ${{ vars.GCP_REGION || 'asia-south1' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test # in-memory + real Postgres (PGlite) suites
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - name: Apply Supabase migrations
+        run: npm ci && npm run build && npm run migrate
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+          MIGRATION_DATABASE_URL: ${{ secrets.SUPABASE_MIGRATION_DB_URL }}
+          DATABASE_CA_CERT: ${{ secrets.SUPABASE_CA_CERT }}
+
+      - name: Authenticate to Google Cloud (keyless)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE }}
+          region: ${{ env.REGION }}
+          image: ${{ env.IMAGE }}:${{ github.sha }}
+          flags: >-
+            --service-account=${{ vars.GCP_RUNTIME_SA }}
+            --allow-unauthenticated
+            --port=8080
+            --cpu=1 --memory=512Mi
+            --min-instances=0 --max-instances=5
+            --concurrency=40 --timeout=60s
+            --cpu-boost
+          env_vars: |
+            NODE_ENV=production
+            TRUST_PROXY=true
+            PUBLIC_BASE_URL=${{ vars.PUBLIC_BASE_URL }}
+            ALLOWED_ORIGINS=${{ vars.ALLOWED_ORIGINS }}
+            BILLING_ENABLED=true
+            BILLING_DOMAIN=vimatons.dao
+            BILLING_PINNED_ADDRESSES=${{ vars.BILLING_PINNED_ADDRESSES }}
+            RECIPIENT_RECORD_POLICY=${{ vars.RECIPIENT_RECORD_POLICY || 'ud-precedence' }}
+            LOG_LEVEL=info
+          # Values come from Secret Manager (stored as secrets, not files).
+          secrets: |
+            DATABASE_URL=DATABASE_URL:latest
+            DATABASE_CA_CERT=DATABASE_CA_CERT:latest
+            UNSTOPPABLE_API_KEY=UNSTOPPABLE_API_KEY:latest
+            ETHEREUM_RPC_URL=ETHEREUM_RPC_URL:latest
+            BASE_RPC_URL=BASE_RPC_URL:latest
+            POLYGON_RPC_URL=POLYGON_RPC_URL:latest
+            PRICE_FEED_API_KEY=PRICE_FEED_API_KEY:latest
+            API_KEYS=API_KEYS:latest
+            MCP_AUTH_SECRET=MCP_AUTH_SECRET:latest
+
+      - name: Smoke test
+        run: |
+          URL="${{ vars.PUBLIC_BASE_URL }}"
+          curl -fsS "$URL/health"
+          curl -fsS "$URL/health/ready"
