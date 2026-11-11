@@ -346,9 +346,78 @@
   }
   const expired = (iso) => Date.parse(iso) <= Date.now();
 
-  /* ---------------------------------------------------------------- wallet (EIP-1193) */
-  const eth = () => window.ethereum;
+  /* ---------------------------------------------------------------- wallet (EIP-1193 + EIP-6963 discovery) */
+  // Several extensions (MetaMask, Base/Coinbase Wallet, Rabby…) fight over window.ethereum, so the
+  // one that wins is not necessarily the one the visitor wants. EIP-6963 lets every installed wallet
+  // announce itself; we list them all and talk only to the one the visitor picked.
+  const WALLETS = new Map(); // rdns|uuid -> { info: { name, icon, rdns, uuid }, provider }
+  window.addEventListener('eip6963:announceProvider', (e) => {
+    const d = e && e.detail;
+    if (d && d.info && d.provider && typeof d.provider.request === 'function') WALLETS.set(d.info.rdns || d.info.uuid, d);
+  });
+  window.dispatchEvent(new Event('eip6963:requestProvider'));
+  let chosen = null; // { id, name, provider }
+  const eth = () => (chosen ? chosen.provider : null);
   const isMobile = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const onAccounts = (a) => setAccount(a && a[0]);
+  const onChain = (c) => (S.chainId = parseInt(c, 16));
+
+  /** All usable wallets: EIP-6963 announcements, or the legacy window.ethereum if nothing announced. */
+  function walletList() {
+    const list = [...WALLETS.entries()].map(([id, d]) => ({ id, name: d.info.name || 'Wallet', icon: d.info.icon, provider: d.provider }));
+    if (!list.length && window.ethereum) {
+      const p = window.ethereum;
+      list.push({ id: 'injected', name: p.isMetaMask ? 'MetaMask' : p.isCoinbaseWallet ? 'Coinbase / Base Wallet' : 'Browser wallet', provider: p });
+    }
+    return list;
+  }
+  function useWallet(w) {
+    if (chosen && chosen.provider.removeListener) {
+      chosen.provider.removeListener('accountsChanged', onAccounts);
+      chosen.provider.removeListener('chainChanged', onChain);
+    }
+    chosen = w;
+    if (!w) return store.set('wallet', null);
+    store.set('wallet', w.id);
+    if (w.provider.on) {
+      w.provider.on('accountsChanged', onAccounts);
+      w.provider.on('chainChanged', onChain);
+    }
+  }
+  /** Modal list of installed wallets. Resolves with the picked wallet, or null if dismissed. */
+  function pickWallet(list, opts) {
+    opts = opts || {};
+    return new Promise((resolve) => {
+      let picked = null;
+      const dlg = h(
+        'dialog',
+        { class: 'wallet-dialog', 'aria-labelledby': 'walletDlgTitle' },
+        h('h3', { id: 'walletDlgTitle' }, opts.title || 'Choose a wallet'),
+        opts.note ? h('p', { class: 'wallet-dialog-note' }, opts.note) : null,
+        h(
+          'div',
+          { class: 'wallet-options' },
+          list.map((w) =>
+            h(
+              'button',
+              { type: 'button', class: 'wallet-option' + (chosen && chosen.id === w.id ? ' current' : ''), onclick: () => ((picked = w), dlg.close()) },
+              typeof w.icon === 'string' && /^data:image\//.test(w.icon) ? h('img', { src: w.icon, alt: '', width: 28, height: 28 }) : ico('wallet'),
+              h('span', null, w.name),
+              chosen && chosen.id === w.id ? h('span', { class: 'wallet-current' }, 'connected') : null,
+            ),
+          ),
+        ),
+        opts.extra || null,
+        h('button', { type: 'button', class: 'btn btn-outline wallet-cancel', onclick: () => dlg.close() }, 'Cancel'),
+      );
+      dlg.addEventListener('close', () => {
+        dlg.remove();
+        resolve(picked);
+      });
+      document.body.appendChild(dlg);
+      dlg.showModal();
+    });
+  }
 
   function setAccount(a) {
     const prev = S.account;
@@ -366,7 +435,16 @@
       if (curPath() === '/pay') render(true);
     }
   }
-  async function connectWallet() {
+  async function connectWallet(forcePick) {
+    const list = walletList();
+    if (list.length && (forcePick || !chosen)) {
+      const w = list.length === 1 && !forcePick ? list[0] : await pickWallet(list);
+      if (!w) return null;
+      if (!chosen || chosen.id !== w.id) {
+        useWallet(w);
+        S.account = null;
+      }
+    }
     if (!eth()) {
       if (isMobile()) {
         location.href = 'https://metamask.app.link/dapp/' + location.host + location.pathname + location.search + location.hash;
@@ -1721,11 +1799,30 @@
   });
   $('walletBtn').addEventListener('click', async () => {
     if (!S.account) return connectWallet();
-    try {
-      await navigator.clipboard.writeText(S.account);
-      toast('Address copied');
-    } catch (e) {
-      toast(S.account);
+    const copy = h('button', { type: 'button', class: 'btn btn-outline wallet-copy' }, 'Copy address');
+    const disconnect = h('button', { type: 'button', class: 'btn btn-outline wallet-copy' }, 'Disconnect');
+    const p = pickWallet(walletList(), { title: (chosen ? chosen.name : 'Wallet') + ' · ' + short(S.account), note: 'Switch to another installed wallet, or:', extra: h('div', { class: 'wallet-actions' }, copy, disconnect) });
+    const dlg = document.querySelector('dialog.wallet-dialog');
+    copy.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(S.account);
+        toast('Address copied');
+      } catch (e) {
+        toast(S.account);
+      }
+      dlg.close();
+    });
+    disconnect.addEventListener('click', () => {
+      useWallet(null);
+      setAccount(null);
+      toast('Disconnected. To fully revoke access, also disconnect this site in your wallet.');
+      dlg.close();
+    });
+    const w = await p;
+    if (w && (!chosen || w.id !== chosen.id)) {
+      useWallet(w);
+      setAccount(null);
+      if (await connectWallet()) render(true);
     }
   });
 
@@ -1737,16 +1834,19 @@
   });
   renderThemeBtn();
   renderWalletBtn();
-  if (eth()) {
-    eth()
+  // Restore the wallet the visitor picked last time (wallets announce right after requestProvider;
+  // give slow extensions a moment). Never auto-pick when several are installed and none was chosen.
+  setTimeout(() => {
+    const list = walletList();
+    const saved = store.get('wallet', null);
+    const w = list.find((x) => x.id === saved) || (list.length === 1 && saved !== null ? list[0] : null);
+    if (!w) return;
+    useWallet(w);
+    w.provider
       .request({ method: 'eth_accounts' })
       .then((a) => a && a[0] && setAccount(a[0]))
       .catch(() => {});
-    if (eth().on) {
-      eth().on('accountsChanged', (a) => setAccount(a && a[0]));
-      eth().on('chainChanged', (c) => (S.chainId = parseInt(c, 16)));
-    }
-  }
+  }, 300);
   loadNetworks().catch(() => {});
   render();
 })();

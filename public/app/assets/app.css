@@ -410,3 +410,17 @@ h3.doc-h { font-size: 17px; margin: 24px 0 10px; scroll-margin-top: 100px; }
 .hero-band.has-video::before { content: ""; position: absolute; inset: 0; z-index: 1; background: #0d57c4; mix-blend-mode: color; pointer-events: none; }
 .hero-band.has-video::after { z-index: 1; background: linear-gradient(90deg, rgba(2, 10, 26, .82) 0%, rgba(2, 10, 26, .45) 50%, rgba(2, 10, 26, .2) 100%); }
 .hero-band .hero-content { z-index: 2; }
+
+/* ---- wallet picker (EIP-6963) ---- */
+.wallet-dialog { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); box-shadow: var(--shadow); padding: 24px; width: min(420px, calc(100vw - 32px)); }
+.wallet-dialog::backdrop { background: rgba(2, 10, 26, .55); }
+.wallet-dialog h3 { margin: 0 0 6px; font-size: 18px; }
+.wallet-dialog-note { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
+.wallet-options { display: grid; gap: 8px; margin: 12px 0 16px; }
+.wallet-option { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; text-align: left; transition: border-color .15s, background .15s; }
+.wallet-option:hover, .wallet-option:focus-visible { border-color: var(--primary); background: var(--primary-soft); outline: none; }
+.wallet-option img, .wallet-option svg { width: 28px; height: 28px; border-radius: 6px; flex: none; }
+.wallet-option.current { border-color: var(--primary); }
+.wallet-current { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--ok); text-transform: uppercase; letter-spacing: .04em; }
+.wallet-actions { display: flex; gap: 8px; margin-bottom: 8px; }
+.wallet-actions .btn, .wallet-cancel { flex: 1; width: 100%; }
